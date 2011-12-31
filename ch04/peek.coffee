@@ -71,6 +71,7 @@ Peek =
             throw
                 type: 'PeekError',
                 message: 'No DOMParser object found.'
+
         elem = doc.documentElement
         if $(elem).filter('parsererror').length > 0
             return null
@@ -78,7 +79,6 @@ Peek =
 
 
 jQuery ->
-
     $('#login_dialog').dialog(
         autoOpen  : yes
         draggable : no
@@ -93,6 +93,34 @@ jQuery ->
                 $('#password').val ''
                 $(this).dialog 'close'
     )
+
+    $('#disconnect_button').click -> Peek.connection.disconnect()
+
+    $('#send_button').click ->
+        input = $('#input').val()
+        error = false
+        if input.length > 0
+            if input[0] is '<'
+                xml = Peek.text_to_xml input
+                if xml
+                    Peek.connection.send xml
+                    $('#input').val ''
+                else
+                    error = true
+            else if input[0] is '$'
+                try
+                    builder = eval input
+                    Peek.connection.send builder
+                    $('#input').val ''
+                catch e
+                    error = true
+            else
+                error = true
+        if error
+            $('#input').animate backgroundColor : "#faa"
+
+    $('#input').keypress ->
+        $(this).css backgroundColor : '#fff'
 
     $(document).bind(
         'connect'
@@ -131,31 +159,3 @@ jQuery ->
             Peek.connection = null
 
     )
-
-    $('#disconnect_button').click -> Peek.connection.disconnect()
-
-    $('#send_button').click ->
-        input = $('#input').val()
-        error = false
-        if input.length > 0
-            if input[0] is '<'
-                xml = Peek.text_to_xml input
-                if xml
-                    Peek.connection.send xml
-                    $('#input').val ''
-                else
-                    error = true
-            else if input[0] is '$'
-                try
-                    builder = eval input
-                    Peek.connection.send builder
-                    $('#input').val ''
-                catch e
-                    error = true
-            else
-                error = true
-        if error
-            $('#input').animate backgroundColor : "#faa"
-
-    $('#input').keypress ->
-        $(this).css backgroundColor : '#fff'
