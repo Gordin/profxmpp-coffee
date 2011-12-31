@@ -156,5 +156,6 @@ jQuery ->
                 error = true
         if error
             $('#input').animate backgroundColor : "#faa"
+
     $('#input').keypress ->
         $(this).css backgroundColor : '#fff'
