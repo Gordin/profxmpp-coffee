@@ -9,7 +9,7 @@ Peek =
 
             $.each body.childNodes, ->
                 $('#console').append(
-                    "<div class='#{type}'>#{Peek.pretty_xml(this)}</div>"
+                    "<div class='foldable #{type}'>#{Peek.pretty_xml(this)}</div>"
                 )
 
             if at_bottom
@@ -129,7 +129,20 @@ jQuery ->
             $('.button').attr('disabled', 'disabled')
             $('#input').addClass('disabled').attr('disabled', 'disabled')
             Peek.connection = null
+    )
 
+    $('#console').on(
+        "click"
+        ".foldable"
+        ->
+            childs = $(this.children).filter((i) -> i > 0)
+            if childs.length is 0
+                return
+            visible = $(childs[0]).filter(":visible")
+            if visible.length is 0
+                childs.show()
+            else
+                childs.hide()
     )
 
     $('#disconnect_button').click -> Peek.connection.disconnect()
