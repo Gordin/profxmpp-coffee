@@ -1,3 +1,24 @@
+class History
+    constructor: ->
+        @commands = []
+        @cur = -1
+    add: (command) ->
+        if command isnt ""
+            @commands.push(command)
+            @cur = @commands.length
+    get: (keyup) ->
+        if @commands.length is 0
+            return ""
+        switch (keyup.which)
+            when 38
+                @cur = 0 if --@cur <= 0
+                return @commands[@cur]
+            when 40
+                @cur = @commands.length - 1 if ++@cur >= @commands.length
+                return @commands[@cur]
+            else
+                return ""
+
 Peek =
     connection : null
 
@@ -79,6 +100,8 @@ Peek =
 
 
 jQuery ->
+    hist = new History()
+
     $('#login_dialog').dialog(
         autoOpen  : yes
         draggable : no
@@ -98,6 +121,7 @@ jQuery ->
 
     $('#send_button').click ->
         input = $('#input').val()
+        hist.add(input)
         error = false
         if input.length > 0
             if input[0] is '<'
@@ -121,6 +145,11 @@ jQuery ->
 
     $('#input').keypress ->
         $(this).css backgroundColor : '#fff'
+
+    $('#input').keyup (keycode) ->
+        command = hist.get keycode
+        if command isnt ""
+            $('#input').val command
 
     $(document).bind(
         'connect'
