@@ -1,6 +1,21 @@
 Gab =
     connection: null
 
+    on_roster: (iq) ->
+        $(iq).find('item').each ->
+            jid = $(this).attr 'jid'
+            name = $(this).attr('name') || jid
+
+            # transform jid into an id
+            jid_id = Gab.jid_to_id jid
+
+            contact = $("<li id='#{jid_id}'>" +
+                "<div class='roster-contact offline'>" +
+                "<div class='roster-name'>#{name}</div>" +
+                "<div class='roster-jid'>#{jid}</div></div></li>")
+
+            Gab.insert_contact contact
+
 jQuery ->
     $('#login_dialog').dialog(
         autoOpen: true
@@ -37,7 +52,10 @@ jQuery ->
 
     $(document).bind(
         'connected'
-        -> # nothing here yet
+        ->
+            iq = $iq(type: 'get')
+                .c('query', xmlns: 'jabber:iq:roster')
+            Gab.connection.sendIQ(iq, Gab.on_roster)
     )
 
     $(document).bind(
