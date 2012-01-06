@@ -1,19 +1,25 @@
-Gab =
+class GabClient
     connection: null
 
-    jid_to_id: (jid) ->
+    @jid_to_id: (jid) ->
         Strophe.getBareJidFromJid(jid)
             .replace(/@/g, "-")
             .replace(/\./g, "-")
 
+    @presence_value: (elem) ->
+        if elem.hasClass 'online'
+            return 2
+        else if elem.hasClass 'away'
+            return 1
+        return 0
+
     on_roster: (iq) =>
-        _this = Gab
         $(iq).find('item').each ->
             jid = $(@).attr 'jid'
             name = $(@).attr('name') || jid
 
             # transform jid into an id
-            jid_id = Gab.jid_to_id jid
+            jid_id = GabClient.jid_to_id jid
 
             contact = $(
                 "<li id='#{jid_id}'>" +
@@ -21,17 +27,16 @@ Gab =
                 "<div class='roster-name'>#{name}</div>" +
                 "<div class='roster-jid'>#{jid}</div></div></li>")
 
-            Gab.insert_contact contact
+            GabClient.insert_contact contact
 
         # set up presence handler and send initial presence
         @connection.addHandler @on_presence, null, "presence"
         @connection.send $pres()
 
     on_presence: (presence) =>
-        _this  = Gab
         ptype  = $(presence).attr 'type'
         from   = $(presence).attr 'from'
-        jid_id = @jid_to_id from
+        jid_id = GabClient.jid_to_id from
 
         if ptype is 'subscribe'
             # populate pending_subscriber, the approve-jid span, and
@@ -55,10 +60,10 @@ Gab =
 
             li = contact.parent()
             li.remove()
-            @insert_contact li
+            GabClient.insert_contact li
 
         # reset addressing for user since their presence changed
-        jid_id = @jid_to_id from
+        jid_id = GabClient.jid_to_id from
         $("#chat-#{jid_id}").data 'jid', Strophe.getBareJidFromJid from
 
         true
@@ -68,7 +73,7 @@ Gab =
             sub = $(@).attr('subscription')
             jid = $(@).attr('jid')
             name = $(@).attr('name') || jid
-            jid_id = Gab.jid_to_id jid
+            jid_id = GabClient.jid_to_id jid
 
             if sub is 'remove'
                 # contact is being removed
@@ -85,13 +90,13 @@ Gab =
                 if $("##{jid_id}").length > 0
                     $("##{jid_id}").replaceWith contact_html
                 else
-                    Gab.insert_contact contact_html
+                    GabClient.insert_contact $(contact_html)
         true
 
-    on_message: (message) ->
+    on_message: (message) =>
         full_jid = $(message).attr('from')
         jid      = Strophe.getBareJidFromJid full_jid
-        jid_id   = Gab.jid_to_id jid
+        jid_id   = GabClient.jid_to_id jid
 
         if $("#chat-#{jid_id}").length is 0
             $('#chat-area').tabs 'add', "#chat-#{jid_id}", jid
@@ -111,7 +116,7 @@ Gab =
                 Strophe.getNodeFromJid(jid) +
                 " is typing...</div>")
 
-            Gab.scroll_chat jid_id
+            @scroll_chat jid_id
 
         body = $(message).find "html > body"
 
@@ -127,10 +132,10 @@ Gab =
             span = $("<span></span>")
             body.each ->
                 if document.importNode
-                    $(document.importNode(this, true)).appendTo span
+                    $(document.importNode(@, true)).appendTo span
                 else
                     # IE workaround
-                    span.append this.xml
+                    span.append @xml
 
             body = span
 
@@ -149,7 +154,7 @@ Gab =
             $("#chat-#{jid_id} .chat-message:last .chat-text")
                 .append(body)
 
-            Gab.scroll_chat jid_id
+            @scroll_chat jid_id
 
         true
 
@@ -157,23 +162,17 @@ Gab =
         div = $("#chat-#{jid_id} .chat-messages").get(0)
         div.scrollTop = div.scrollHeight
 
-    presence_value: (elem) ->
-        if elem.hasClass 'online'
-            return 2
-        else if elem.hasClass 'away'
-            return 1
-        return 0
 
-    insert_contact: (elem) ->
+    @insert_contact: (elem) =>
         jid = elem.find('.roster-jid').text()
-        pres = Gab.presence_value elem.find '.roster-contact'
+        pres = GabClient.presence_value elem.find '.roster-contact'
 
         contacts = $ '#roster-area li'
 
         if contacts.length > 0
             inserted = false
             contacts.each ->
-                cmp_pres = Gab.presence_value(
+                cmp_pres = GabClient.presence_value(
                     $(@).find '.roster-contact'
                 )
                 cmp_jid = $(@).find('.roster-jid').text()
@@ -192,6 +191,8 @@ Gab =
                 $('#roster-area ul').append elem
         else
             $('#roster-area ul').append elem
+
+Gab = new GabClient
 
 jQuery ->
     $('#login_dialog').dialog(
@@ -265,7 +266,7 @@ jQuery ->
     $('.roster-contact').live 'click', ->
         jid    = $(@).find(".roster-jid").text()
         name   = $(@).find(".roster-name").text()
-        jid_id = Gab.jid_to_id(jid)
+        jid_id = GabClient.jid_to_id(jid)
 
         if $("#chat-#{jid_id}").length is 0
             $('#chat-area').tabs 'add', "#chat-#{jid_id}", name
@@ -302,7 +303,7 @@ jQuery ->
                 "</span>&gt;" +
                 "<span class='chat-text'>#{body}</span></div>")
 
-            Gab.scroll_chat Gab.jid_to_id jid
+            Gab.scroll_chat GabClient.jid_to_id jid
 
             $(@).val ''
             $(@).parent().data 'composing', false
@@ -317,7 +318,7 @@ jQuery ->
                         xmlns: "http://jabber.org/protocol/chatstates")
                 Gab.connection.send notify
 
-                $(this).parent().data 'composing', true
+                $(@).parent().data 'composing', true
 
     $('#disconnect').click ->
         Gab.connection.disconnect()
@@ -330,7 +331,7 @@ jQuery ->
         buttons:
             "Start": ->
                 jid = $('#chat-jid').val().toLowerCase()
-                jid_id = Gab.jid_to_id jid
+                jid_id = GabClient.jid_to_id jid
 
                 $('#chat-area').tabs 'add', "#chat-#{jid_id}", jid
                 $('#chat-' + jid_id).append(
@@ -344,7 +345,7 @@ jQuery ->
 
                 $('#chat-jid').val ''
 
-                $(this).dialog 'close'
+                $(@).dialog 'close'
     )
 
     $('#new-chat').click ->
