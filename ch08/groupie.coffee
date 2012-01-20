@@ -6,6 +6,26 @@ XML_MUC = xmlns : NS_MUC
 joined = null
 participants = null
 
+set_affiliation = (nick, aff) ->
+    iq = $iq(
+        to: room
+        type: "set").c(
+            'query'
+            xmlns : "#{NS_MUC}#admin").c(
+                'item'
+                jid : participants[nick]
+                affiliation : aff)
+    connection.sendIQ iq
+
+ban = (nick) ->
+    set_affiliation nick, "outcast"
+
+op = (nick) ->
+    set_affiliation nick, "admin"
+
+deop = (nick) ->
+    set_affiliation nick, "none"
+
 on_presence = (presence) ->
     from = $(presence).attr 'from'
 
@@ -19,7 +39,9 @@ on_presence = (presence) ->
         else if(
             not participants[nick] and $(presence).attr('type') isnt 'unavailable')
             # add to participant list
-            participants[nick] = true
+            user_jid = $(presence).find('item').attr('jid')
+            participants[nick] = user_jid or true
+
             $('#participant-list').append "<li>#{nick}</li>"
 
             if joined
@@ -62,13 +84,34 @@ on_public_message = (message) ->
         delayed = $(message).children("delay").length > 0 or
             $(message).children("x[xmlns='jabber:x:delay']").length > 0
 
-        if not notice
-            delay_css = if delayed then " delayed" else ""
-            add_message "<div class='message' #{delay_css}>&lt;" +
-                        "<span class='#{nick_class}'>#{nick}</span>&gt; " +
-                        "<span class='body'>#{body}</span></div>"
-        else
+        # look for room topic change
+        subject = $(message).children('subject').text()
+        $('#room-topic').text(subject) if subject
+
+        if notice
             add_message "<div class='notice'>*** #{body}</div>"
+        else if body isnt ""
+            delay_css = if delayed then " delayed" else ""
+            action = body.match /\me (.*)$/
+            if not action
+                add_message "<div class='message#{delay_css}'>&lt;" +
+                            "<span class='#{nick_class}'>#{nick}</span>&gt; " +
+                            "<span class='body'>#{body}</span></div>"
+            else
+                add_message "<div class='message action #{delay_css}'>" +
+                            "* #{nick} #{action[1]}</div>"
+    true
+
+on_private_message = (message) ->
+    from = $(message).attr 'from'
+    nick = Strophe.getResourceFromJid from
+
+    # make sure this message is from the correct room
+    if room is Strophe.getBareJidFromJid from
+        body = $(message).children('body').text()
+        add_message "<div class='message private'>" +
+                    "@@ &lt;<span class='nick'>#{nick}</span>&gt; " +
+                    "<span class='body'>#{body}</span> @@</div>"
     true
 
 add_message = (msg) ->
@@ -114,12 +157,57 @@ jQuery ->
 
             body = $(this).val()
 
-            connection.send(
-                $msg(
+            match = body.match(/^\/(.*?)(?: (.*))?$/)
+            args = null
+            if match
+                command = match[1]
+                if command is "msg"
+                    args = match[2].match /^(.*?) (.*)$/
+                    if participants[args[1]]
+                        connection.send $msg(
+                            to: "#{room}/#{args[1]}"
+                            type: "chat")
+                            .c('body').t(body)
+                        add_message "<div class='message private'>@@ &lt;" +
+                                    "<span class='nick self'>#{nickname}</span>&gt; " +
+                                    "<span class='body'>#{args[2]}</span> @@</div>"
+                    else
+                        add_message "<div class='notice error'>" +
+                                    "Error: User not in room.</div>"
+                else if command is "me" or command is "action"
+                    connection.send $msg(
+                        to: room
+                        type: "groupchat")
+                        .c('body').t('/me #{match[2]}')
+                else if command is "topic"
+                    msg = $msg(
+                        to: room
+                        type: "groupchat")
+                        .c('subject').t(match[2])
+                    connection.send msg
+                else if command is "kick"
+                    connection.sendIQ $iq(
+                        to: room
+                        type: "set").c(
+                            'query'
+                            xmlns: "#{NS_MUC}#admin").c(
+                                'item'
+                                nick: match[2]
+                                role: "none")
+                else if command is "ban"
+                    ban match[2]
+                else if command is "op"
+                    op match[2]
+                else if command is "deop"
+                    deop match[2]
+                else
+                    add_message "<div class='notice error'>" +
+                                "Error: Command not recognized.</div>"
+            else
+                connection.send $msg(
                     to: room
                     type: "groupchat")
-                .c('body').t(body)
-            )
+                    .c('body').t(body)
 
             $(this).val ''
 
@@ -153,6 +241,13 @@ jQuery ->
                 null
                 "message"
                 "groupchat"
+            )
+
+            connection.addHandler(
+                on_private_message
+                null
+                "message"
+                "chat"
             )
 
             pres = $pres(to: "#{room}/#{nickname}").c('x', XML_MUC)
